@@ -15,6 +15,15 @@ import {
   useRequestSnap,
 } from '../hooks';
 import { isLocalSnap, shouldDisplayReconnectButton } from '../utils';
+import {
+  Connection,
+  PublicKey,
+  Transaction,
+  SystemProgram,
+  sendAndConfirmTransaction,
+  Keypair,
+} from '@solana/web3.js';
+import base58 from 'bs58';
 
 const Container = styled.div`
   display: flex;
@@ -114,6 +123,77 @@ const Index = () => {
     await invokeSnap({ method: 'hello' });
   };
 
+  const handleSignTransaction = async () => {
+    console.log('handleSignTransaction');
+    const network = 'https://api.devnet.solana.com';
+    console.log({ network });
+    const connection = new Connection(network);
+    console.log({ connection });
+    const fromPublicKey = new PublicKey(
+      '3SP9WPhT5jDaSBL4yu2nBsQ99mPEuQnLDG9aHcaZZ5qK',
+    );
+    console.log({ fromPublicKey });
+    const toPublicKey = new PublicKey(
+      '7kQ81ReGUKQV2Vp2rCbC6qqXqrxj8gjLnXjHk9Du4fVc',
+    );
+    console.log({ toPublicKey });
+
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: fromPublicKey,
+        toPubkey: toPublicKey,
+        lamports: 1000000, // Cantidad de lamports a transferir (1 SOL = 1,000,000,000 lamports)
+      }),
+    );
+
+    console.log({ transaction });
+
+    const { publicKey }: any = await window.ethereum.request({
+      method: 'wallet_invokeSnap',
+      params: {
+        snapId: 'local:http://localhost:8080',
+        request: {
+          method: 'signTransaction',
+          params: {
+            derivationPath: [`0'`, `0'`],
+            message: transaction,
+          },
+        },
+      },
+    });
+
+    console.log({ publicKey, fromPublicKey });
+
+    const senderPrivateKey = '';
+    const senderKeypair = Keypair.fromSecretKey(
+      base58.decode(senderPrivateKey),
+    );
+
+    transaction.feePayer = fromPublicKey;
+    transaction.recentBlockhash = (
+      await connection.getLatestBlockhash()
+    ).blockhash;
+    transaction.sign(senderKeypair);
+
+    console.log({ transaction });
+    const signature = await connection.sendRawTransaction(
+      transaction.serialize(),
+      {
+        skipPreflight: false, // Set to true to skip preflight checks
+      },
+    );
+
+    await connection.confirmTransaction(signature);
+
+    // const confirmation = await sendAndConfirmTransaction(
+    //   connection,
+    //   transaction,
+    //   [],
+    // );
+
+    // console.log({ confirmation });
+  };
+
   return (
     <Container>
       <Heading>
@@ -190,6 +270,25 @@ const Index = () => {
             !shouldDisplayReconnectButton(installedSnap)
           }
         />
+        <Card
+          content={{
+            title: 'Sign a transaction',
+            description: '',
+            button: (
+              <SendHelloButton
+                onClick={handleSignTransaction}
+                disabled={!installedSnap}
+              />
+            ),
+          }}
+          disabled={!installedSnap}
+          fullWidth={
+            isMetaMaskReady &&
+            Boolean(installedSnap) &&
+            !shouldDisplayReconnectButton(installedSnap)
+          }
+        />
+
         <Notice>
           <p>
             Please note that the <b>snap.manifest.json</b> and{' '}
